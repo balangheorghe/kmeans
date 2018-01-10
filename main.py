@@ -1,8 +1,10 @@
 #! python3
+import shutil
 import os
 import numpy
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import random
 
 
 def load_file(path):
@@ -11,16 +13,24 @@ def load_file(path):
     handler.close()
     output = []
     for line in content:
-        line = line.split(" ")
-        x = float(line[0].strip())
-        y = float(line[1].strip())
-        output.append((x, y))
+        if "\t" in line:
+            line = line.split("\t")
+        elif "," in line:
+            line = line.split(",")
+        else:
+            line = line.split(" ")
+        line_stuff = list()
+        for item in line:
+            if item.strip() != "":
+                line_stuff.append(float(item.strip()))
+        output.append(tuple(line_stuff))
     return output
 
 
 def combine_jscore_iter(j_score_list, iter_list):
     plt.cla()
     flg = plt.figure()
+    flg.set_size_inches(18.5, 10.5, forward=True)
     x = [0]
     iter = 0
     for i in range(0, len(j_score_list) - 1):
@@ -47,6 +57,7 @@ def combine_jscore_iter(j_score_list, iter_list):
 def generate_jscore_graphic(j_score_list):
     plt.cla()
     flg = plt.figure()
+    flg.set_size_inches(18.5, 10.5, forward=True)
     x = [0]
     iter = 0
     for i in range(0, len(j_score_list)-1):
@@ -83,6 +94,7 @@ def generate_jscore_graphic(j_score_list):
 def generate_inter_score_graphic(inter_score_list):
     plt.cla()
     flg = plt.figure()
+    flg.set_size_inches(18.5, 10.5, forward=True)
     x = []
     for i in range(0, len(inter_score_list)):
         x.append(i)
@@ -107,12 +119,14 @@ def generate_inter_score_graphic(inter_score_list):
 def ploting(clusters, new_centroids, step):
     plt.axis([0, 1, 0, 1])
     index = 0
+
     # color_centroid = ['m', 'y', 'k']
     color_cluster = ['b', 'r', 'g']
     color_centroid = ['b', 'r', 'g']
     color_old_centroid = ['#33D4FF', '#FF33E6', '#33FF6B']
     plt.cla()
     flg = plt.figure()
+    flg.set_size_inches(18.5, 10.5, forward=True)
     if new_centroids:
         for centroid in new_centroids:
             plt.plot(centroid[0], centroid[1], '{}x'.format(color_centroid[index]))
@@ -213,21 +227,27 @@ def computing_interclustere(clusters, mean_point, j_len, n):
         custom_sum = 0
         for t in x:
             custom_sum += t * t
+            # print(t, custom_sum)
+        # print(pondere, custom_sum)
         inter_ += pondere * custom_sum
+    # print(inter_)
     return inter_
 
 
-def kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, inter_score_list):
+def kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, inter_score_list, noploting = False):
     handle = open("iteratie_{}.date".format(iteration), "w")
     if iteration == 0:
         for point in points:
             distances = []
             for centroid in centroids:
-                distance = float("{0:.4f}".format(numpy.sqrt((centroid[0] - point[0]) * (centroid[0] - point[0]) + \
-                                      (centroid[1] - point[1]) * (centroid[1] - point[1]))))
+                custom_sum = 0
+                for i in range(0, len(centroid)):
+                    custom_sum += (centroid[i] - point[i]) * (centroid[i] - point[i])
+                distance = float("{0:.4f}".format(numpy.sqrt(custom_sum)))
                 distances.append(distance)
             clusters[centroids[numpy.argmin(distances)]].append(point)
-        ploting(clusters, None, iteration)
+        if not noploting:
+            ploting(clusters, None, iteration)
     else:
         old_centroids = list(centroids)
         for i in range(0, len(centroids)):
@@ -240,7 +260,8 @@ def kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, int
         # handle.write("Old centroids: {}\n".format(old_centroids))
         # print("New centroids: {}".format(new_centroids))
         # handle.write("New centroids: {}\n".format(new_centroids))
-        ploting(clusters, new_centroids, iteration)
+        if not noploting:
+            ploting(clusters, new_centroids, iteration)
         if old_centroids == new_centroids:
             return clusters
         j_intermediar = computing_j_intermediar(clusters, new_centroids, len(points[0]))
@@ -253,8 +274,10 @@ def kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, int
         for point in points:
             distances = []
             for centroid in centroids:
-                distance = float("{0:.4f}".format(numpy.sqrt((centroid[0] - point[0]) * (centroid[0] - point[0]) + \
-                                      (centroid[1] - point[1]) * (centroid[1] - point[1]))))
+                custom_sum = 0
+                for i in range(0, len(centroid)):
+                    custom_sum += (centroid[i] - point[i]) * (centroid[i] - point[i])
+                distance = float("{0:.4f}".format(numpy.sqrt(custom_sum)))
                 distances.append(distance)
             clusters[centroids[numpy.argmin(distances)]].append(point)
     j_score = computing_j(clusters, len(points[0]))
@@ -270,12 +293,43 @@ def kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, int
     print("\nPoints: {}\nCentroids: {}\nClusters: {}\n".format(points, centroids, clusters))
     handle.write("Points: {}\nCentroids: {}\nClusters: {}\n".format(points, centroids, clusters))
     iteration += 1
-    return kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, inter_score_list)
+    return kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, inter_score_list, noploting)
 
 
-if __name__ == '__main__':
+def plus_plus_initialization(points, k):
+    x = int(random.uniform(0, len(points)))
+    clusters = []
+    clusters.append(tuple(points[x]))
+    for j in range(1, k):
+        d_list = []
+        for point in points:
+            sums = []
+            for r in range(0, len(clusters)):
+                sum = 0
+                for ttt in range(0, len(clusters[0])):
+                    sum += (point[ttt] - clusters[r][ttt]) * (point[ttt] - clusters[r][ttt])
+                sums.append(sum)
+            min_sum = min(sums)
+            d_list.append(min_sum)
+        sum_dlist = 0
+        for item in d_list:
+            sum_dlist += item
+        probabilites = [item / sum_dlist for item in d_list]
+        clusters.append(tuple(points[list(numpy.random.choice(len(points), 1, probabilites))[0]]))
+    return clusters
+
+def run(number_of_k):
     points = list(load_file("points"))
-    centroids = list(load_file("centroid"))
+    # if os.path.exists("centroid"):
+    #     centroids = list(load_file("centroid"))
+    # else:
+    #     centroids = []
+    #     for k in range(0, int(number_of_k)):
+    #         random_centroid = []
+    #         for i in range(0, len(points[0])):
+    #             random_centroid.append(random.uniform(-1, 1))
+    #         centroids.append(tuple(random_centroid))
+    centroids = list(plus_plus_initialization(points, number_of_k))
     iteration = 0
     clusters = dict()
     for centroid in centroids:
@@ -288,7 +342,11 @@ if __name__ == '__main__':
         for item in points:
             sum_tre += item[i]
         mean_point.append(sum_tre * 1.0 / len(points))
-    new_clutser = kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, inter_score_list)
+
+    noploting = False
+    if len(points[0]) > 2 or number_of_k > 3:
+        noploting = True
+    new_clutser = kmeans(iteration, points, centroids, clusters, j_score_list, mean_point, inter_score_list, noploting)
 
     generate_jscore_graphic(j_score_list)
     print(j_score_list)
@@ -296,4 +354,29 @@ if __name__ == '__main__':
     generate_inter_score_graphic(inter_score_list)
     print(inter_score_list)
 
-    combine_jscore_iter(j_score_list,inter_score_list)
+    # combine_jscore_iter(j_score_list,inter_score_list)
+
+if __name__ == '__main__':
+    # number_of_k = input("Please enter the k number:")
+    # run(number_of_k)
+    # k_value = [2, 4, 6, 8]
+    k_value = [16]
+    # k_value = [3, 5, 9]
+    randoms = 5
+    for i in range(0, randoms):
+        for j in k_value:
+            dir_name = "{}_random_{}".format(j, i)
+            if not os.path.exists(dir_name):
+                os.mkdir(dir_name)
+            run(j)
+            files = os.listdir(os.getcwd())
+            for item in files:
+                if os.path.isdir(item):
+                    continue
+                if ".py" in item:
+                    continue
+                if "points" in item:
+                    continue
+                shutil.move(item, os.path.join(dir_name, item))
+            content = len(os.listdir(dir_name))
+            os.rename(dir_name, "{}_iteratii_{}".format(dir_name, content - 4))
